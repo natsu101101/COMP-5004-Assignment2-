@@ -1,5 +1,69 @@
 # COMP-5004-Assignment2-
 
+## Assignment 2.2 — Streaming decision tree
+
+The `numcompute_stream/` package extends the original NumCompute project with a decision tree that learns from incoming chunks of data. The individual implementation is on the `fabio-assignment-2-2` branch.
+
+### Setup on Windows
+
+Open the repository folder in VS Code. From the project root, run:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install numpy matplotlib pytest ipykernel
+```
+
+The framework uses Python, NumPy and matplotlib. Pytest runs the tests, and ipykernel runs the demo notebook.
+
+### Run the demo
+
+1. Open `demo/stream_demo.ipynb` in VS Code.
+2. Click **Select Kernel** and choose the project's `.venv` Python environment.
+3. Click **Run All**.
+
+The notebook reads `demo/sample_data.csv` using the project's CSV reader. It predicts customer plans from age, income and weekly hours. The file contains 12 rows. One row has no recorded plan, leaving 11 labelled examples.
+
+The demo shows per-chunk predictions, accuracy, cumulative accuracy, buffer status, retraining events and Python-traced memory. It also plots accuracy over time, compares two buffer sizes and shows predicted versus actual plans for the latest scored chunk.
+
+### How buffered training works
+
+`chunk_size` controls how many rows arrive at once. `buffer_size` controls how many rows the model collects before retraining. When a chunk reaches or crosses the threshold, the model trains on the entire buffer and clears it. Between retrains, predictions use the most recently trained tree.
+
+```python
+from numcompute_stream.pipeline import Pipeline
+from numcompute_stream.preprocessing import SimpleImputer
+from numcompute_stream.tree import DecisionTreeClassifier
+
+pipe = Pipeline([
+    ("imputer", SimpleImputer(strategy="mean")),
+    ("tree", DecisionTreeClassifier(max_depth=3, buffer_size=4)),
+])
+
+pipe.partial_fit([[10], [20]], ["low", "low"])     # Two rows waiting
+pipe.partial_fit([[30], [40]], ["high", "high"])   # Four rows trigger training
+print(pipe.predict([[10], [40]]).tolist())          # ['low', 'high']
+```
+
+`StreamTrainer.fit_chunk(X, y)` scores each incoming chunk before training on it once a trained tree is available. Warm-up chunks have no accuracy score. Cumulative accuracy is the total number of correct predictions divided by the total number of scored rows.
+
+### Run the streaming tests
+
+From the project root:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/test_stream_tree.py tests/test_stream_preprocessing.py tests/test_stream_framework.py -q
+```
+
+The three files contain 34 tests covering the tree, preprocessing, statistics, metrics, pipeline, trainer and visualisations.
+
+### Run the benchmark
+
+```powershell
+.\.venv\Scripts\python.exe .\benchmark\benchmark_stream.py
+```
+
+The first comparison checks that loop-based and vectorised confusion matrices give identical counts, then times both implementations. The second generates 2,000 labelled rows and feeds them to the tree in chunks of 20. It compares buffer sizes of 40, 100 and 200 using accuracy, retrain count, total retraining time and average time per retrain. All three trees are scored on the same final 1,800 rows.
+
 ## Section 1: Data and Preprocessing (`io.py`, `preprocessing.py`)
 
 Loads CSV files into NumPy arrays and prepares them for modelling. Only NumPy is
