@@ -33,7 +33,11 @@ class StandardScaler(_StreamingFit, batch.StandardScaler):
         old_var = getattr(self, "var_", np.zeros(X.shape[1]))
         share = count / np.maximum(total, 1)
         old_share = old_count / np.maximum(total, 1)
-        mean = old_mean * old_share + chunk_mean * share
+        mean = np.where(
+            old_mean == chunk_mean,
+            old_mean,
+            old_mean * old_share + chunk_mean * share,
+        )
         centered = np.where(valid, X - chunk_mean, 0.0)
         chunk_var = np.sum(
             (centered / np.sqrt(np.maximum(count, 1))) ** 2,
